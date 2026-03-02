@@ -13,7 +13,7 @@ export default function DashboardLayout({
         <Sidebar />
       </div>
 
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col lg:pl-64">
         <Navbar />
         <main className="flex-1 p-6">
           <div className="mx-auto max-w-7xl">

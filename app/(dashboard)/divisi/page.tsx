@@ -75,8 +75,8 @@ export default function DivisiPage() {
           "Accept": "application/json",
         },
         body: JSON.stringify({
-          nama_divisi: namaDivisi, // Reverting to nama_divisi as it's the likely API field
-          divisi: namaDivisi,      // Also sending divisi just in case
+          nama_divisi: namaDivisi,
+          divisi: namaDivisi,
         }),
       });
 

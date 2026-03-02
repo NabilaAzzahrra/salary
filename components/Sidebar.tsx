@@ -24,8 +24,24 @@ export default function Sidebar() {
     { name: "Konfigurasi", href: "/konfigurasi", icon: "fi-rr-settings-sliders" },
   ];
 
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user");
+    if (userData) {
+      try {
+        const user = JSON.parse(userData);
+        setRole(user.role);
+      } catch (error) {
+        console.error("Error parsing user data:", error);
+      }
+    }
+  }, []);
+
+  const isAdmin = role === "admin";
+
   return (
-    <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 flex-col border-r bg-primary px-4 py-8 text-white transition-transform lg:relative lg:translate-x-0 border-white/10 shadow-2xl custom-scrollbar overflow-y-auto">
+    <aside className="fixed left-0 top-0 z-20 flex h-screen w-64 flex-col border-r bg-primary px-4 py-8 text-white transition-transform lg:translate-x-0 border-white/10 shadow-2xl custom-scrollbar overflow-y-auto">
       <div className="mb-10 px-2 flex items-center gap-3">
         <div className="h-8 w-8 rounded-lg bg-tertiary flex items-center justify-center font-bold text-white shadow-lg">S</div>
         <h2 className="text-xl font-bold tracking-tight text-white">
@@ -47,78 +63,82 @@ export default function Sidebar() {
           <span className="font-semibold">Dashboard</span>
         </Link>
 
-        {/* Master Group */}
-        <div className="space-y-1">
-          <button
-            onClick={() => setIsMasterOpen(!isMasterOpen)}
-            className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-              isMasterOpen ? "text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
-            }`}
-          >
-            <i className="fi fi-rr-database text-lg"></i>
-            <span className="font-semibold">Master</span>
-            <i className={`fi fi-rr-angle-small-down ml-auto transition-transform ${isMasterOpen ? "rotate-180" : ""}`}></i>
-          </button>
+        {isAdmin && (
+          <>
+            {/* Master Group */}
+            <div className="space-y-1">
+              <button
+                onClick={() => setIsMasterOpen(!isMasterOpen)}
+                className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
+                  isMasterOpen ? "text-white" : "text-white/60 hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                <i className="fi fi-rr-database text-lg"></i>
+                <span className="font-semibold">Master</span>
+                <i className={`fi fi-rr-angle-small-down ml-auto transition-transform ${isMasterOpen ? "rotate-180" : ""}`}></i>
+              </button>
 
-          {isMasterOpen && (
-            <div className="ml-4 border-l border-white/10 pl-2 space-y-1">
-              {masterItems.map((item) => {
-                const isActive = pathname === item.href;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all duration-200 ${
-                      isActive
-                        ? "bg-white/10 text-white border border-white/10"
-                        : "text-white/50 hover:bg-white/5 hover:text-white"
-                    }`}
-                  >
-                    <i className={`fi ${item.icon} text-base ${isActive ? "text-tertiary" : ""}`}></i>
-                    <span className="text-sm font-semibold">{item.name}</span>
-                  </Link>
-                );
-              })}
+              {isMasterOpen && (
+                <div className="ml-4 border-l border-white/10 pl-2 space-y-1">
+                  {masterItems.map((item) => {
+                    const isActive = pathname === item.href;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        className={`flex items-center gap-3 rounded-xl px-4 py-2.5 transition-all duration-200 ${
+                          isActive
+                            ? "bg-white/10 text-white border border-white/10"
+                            : "text-white/50 hover:bg-white/5 hover:text-white"
+                        }`}
+                      >
+                        <i className={`fi ${item.icon} text-base ${isActive ? "text-tertiary" : ""}`}></i>
+                        <span className="text-sm font-semibold">{item.name}</span>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Other Modules */}
-        <Link
-          href="/presensi"
-          className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-            pathname === "/presensi"
-              ? "bg-white/10 text-white shadow-sm border border-white/10"
-              : "text-white/60 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          <i className="fi fi-rr-calendar-check text-lg"></i>
-          <span className="font-semibold">Presensi</span>
-        </Link>
+            {/* Other Modules */}
+            <Link
+              href="/presensi"
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
+                pathname === "/presensi"
+                  ? "bg-white/10 text-white shadow-sm border border-white/10"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <i className="fi fi-rr-calendar-check text-lg"></i>
+              <span className="font-semibold">Presensi</span>
+            </Link>
 
-        <Link
-          href="/cuti"
-          className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-            pathname === "/cuti"
-              ? "bg-white/10 text-white shadow-sm border border-white/10"
-              : "text-white/60 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          <i className="fi fi-rr-calendar-minus text-lg"></i>
-          <span className="font-semibold">Cuti</span>
-        </Link>
+            <Link
+              href="/cuti"
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
+                pathname === "/cuti"
+                  ? "bg-white/10 text-white shadow-sm border border-white/10"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <i className="fi fi-rr-calendar-minus text-lg"></i>
+              <span className="font-semibold">Cuti</span>
+            </Link>
 
-        <Link
-          href="/gaji"
-          className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
-            pathname === "/gaji"
-              ? "bg-white/10 text-white shadow-sm border border-white/10"
-              : "text-white/60 hover:bg-white/5 hover:text-white"
-          }`}
-        >
-          <i className="fi fi-rr-money-bill-wave text-lg"></i>
-          <span className="font-semibold">Gaji</span>
-        </Link>
+            <Link
+              href="/gaji"
+              className={`flex items-center gap-3 rounded-xl px-4 py-3 transition-all duration-200 ${
+                pathname === "/gaji"
+                  ? "bg-white/10 text-white shadow-sm border border-white/10"
+                  : "text-white/60 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <i className="fi fi-rr-money-bill-wave text-lg"></i>
+              <span className="font-semibold">Gaji</span>
+            </Link>
+          </>
+        )}
       </nav>
 
       <div className="mt-auto border-t border-white/10 pt-6">

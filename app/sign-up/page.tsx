@@ -8,7 +8,7 @@ export default function SignIn() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState("");
+  const [role, setRole] = useState("user");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -18,7 +18,7 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/register", {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -111,19 +111,6 @@ export default function SignIn() {
               />
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-slate-700 dark:text-zinc-300">
-                Role
-              </label>
-              <input
-                type="text"
-                placeholder="Manager / Accountant"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition-all focus:border-primary focus:ring-4 focus:ring-primary/10 dark:border-zinc-700 dark:bg-zinc-800"
-                required
-              />
-            </div>
 
             {error && (
               <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/10 dark:text-red-400 border border-red-100 dark:border-red-900/20">
