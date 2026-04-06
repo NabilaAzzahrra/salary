@@ -55,46 +55,144 @@ export default function KaryawanPage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Placeholders for data fetching
-  useEffect(() => {
-    // Mimic fetching data
-    setJabatanList([
-      { id: 1, jabatan: "Manager IT" },
-      { id: 2, jabatan: "Frontend Developer" },
-      { id: 3, jabatan: "HR Specialist" },
-      { id: 4, jabatan: "Finance Manager" },
-    ]);
-    setKaryawanList([
-      { 
-        id: 1, 
-        nik: "EMP001", 
-        nama: "Ahmad Fauzi", 
-        email: "ahmad.fauzi@company.com", 
-        tempat_lahir: "Bandung", 
-        tanggal_lahir: "1990-05-15", 
-        alamat: "Jl. Merdeka No. 123", 
-        id_jabatan: 1, 
-        status_aktif: true,
-        jabatan: { id: 1, jabatan: "Manager IT" }
-      },
-      { 
-        id: 2, 
-        nik: "EMP002", 
-        nama: "Siti Aminah", 
-        email: "siti.aminah@company.com", 
-        tempat_lahir: "Jakarta", 
-        tanggal_lahir: "1995-08-20", 
-        alamat: "Jl. Sudirman No. 45", 
-        id_jabatan: 3, 
-        status_aktif: true,
-        jabatan: { id: 3, jabatan: "HR Specialist" }
-      },
-    ]);
-  }, []);
+  const fetchJabatan = async () => {
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/jabatan", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setJabatanList(data.data || data);
+      }
+    } catch (err: unknown) {
+      console.error("Fetch Jabatan Error:", err);
+    }
+  };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const fetchKaryawan = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/karyawan", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Gagal mengambil data karyawan");
+      setKaryawanList(data.data || data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchJabatan();
+      fetchKaryawan();
+    }
+  }, [token]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // No action as requested
+    setLoading(true);
+    setError("");
+
+    const url = editingId
+      ? `https://payroll.politekniklp3i-tasikmalaya.ac.id/api/karyawan/${editingId}`
+      : "https://payroll.politekniklp3i-tasikmalaya.ac.id/api/karyawan";
+    
+    const method = editingId ? "PATCH" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method: method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          nik,
+          nama,
+          email,
+          tempat_lahir: tempatLahir,
+          tanggal_lahir: tanggalLahir,
+          alamat,
+          id_jabatan: parseInt(idJabatan),
+          status_aktif: statusAktif,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || `Gagal ${editingId ? 'mengupdate' : 'menambahkan'} karyawan`);
+      }
+
+      resetForm();
+      fetchKaryawan();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setNik("");
+    setNama("");
+    setEmail("");
+    setTempatLahir("");
+    setTanggalLahir("");
+    setAlamat("");
+    setIdJabatan("");
+    setStatusAktif(true);
+    setEditingId(null);
+  };
+
+  const handleEdit = (item: Karyawan) => {
+    setEditingId(item.id);
+    setNik(item.nik);
+    setNama(item.nama);
+    setEmail(item.email);
+    setTempatLahir(item.tempat_lahir || "");
+    setTanggalLahir(item.tanggal_lahir || "");
+    setAlamat(item.alamat || "");
+    setIdJabatan(item.id_jabatan.toString());
+    setStatusAktif(item.status_aktif);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus data karyawan ini?")) return;
+    try {
+      const res = await fetch(`https://payroll.politekniklp3i-tasikmalaya.ac.id/api/karyawan/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Gagal menghapus karyawan");
+      }
+      fetchKaryawan();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    }
   };
 
   const filteredJabatan = jabatanList.filter(j => 
@@ -265,14 +363,15 @@ export default function KaryawanPage() {
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-[0.98]"
+                disabled={loading}
+                className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-[0.98] disabled:opacity-50"
               >
-                {editingId ? "Update" : "Simpan"}
+                {loading ? "Process..." : editingId ? "Update" : "Simpan"}
               </button>
               {editingId && (
                 <button
                   type="button"
-                  onClick={() => setEditingId(null)}
+                  onClick={resetForm}
                   className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
                 >
                   Batal
@@ -308,7 +407,7 @@ export default function KaryawanPage() {
                 {karyawanList.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-8 py-16 text-center text-slate-400 italic">
-                      No employees found.
+                      {loading ? "Menarik data..." : "No employees found."}
                     </td>
                   </tr>
                 ) : (
@@ -320,7 +419,7 @@ export default function KaryawanPage() {
                       </td>
                       <td className="px-8 py-5">
                         <span className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-[11px] font-bold text-slate-600 dark:text-slate-400 border border-slate-200/50 dark:border-zinc-700 group-hover:bg-white dark:group-hover:bg-primary/20 transition-all">
-                          {item.jabatan?.jabatan || "N/A"}
+                          {item.jabatan?.jabatan || jabatanList.find(j => j.id === item.id_jabatan)?.jabatan || "N/A"}
                         </span>
                       </td>
                       <td className="px-8 py-5">
@@ -340,12 +439,14 @@ export default function KaryawanPage() {
                             ℹ️
                           </button>
                           <button
+                            onClick={() => handleEdit(item)}
                             className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-primary rounded-xl transition-all shadow-sm hover:shadow-primary/30"
                             title="Edit"
                           >
                             ✏️
                           </button>
                           <button
+                            onClick={() => handleDelete(item.id)}
                             className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-secondary rounded-xl transition-all shadow-sm hover:shadow-secondary/30"
                             title="Hapus"
                           >
@@ -372,7 +473,7 @@ export default function KaryawanPage() {
                
                <div className="relative z-10">
                  <h3 className="text-2xl font-bold tracking-tight">{selectedKaryawan.nama}</h3>
-                 <p className="text-white/70 text-sm font-medium mt-1">{selectedKaryawan.jabatan?.jabatan || "No Position"}</p>
+                 <p className="text-white/70 text-sm font-medium mt-1">{selectedKaryawan.jabatan?.jabatan || jabatanList.find(j => j.id === selectedKaryawan.id_jabatan)?.jabatan || "No Position"}</p>
                </div>
                
                <button 
@@ -413,7 +514,7 @@ export default function KaryawanPage() {
                 <div>
                   <label className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 mb-2 block">Birth Information</label>
                   <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
-                    {selectedKaryawan.tempat_lahir}, {new Date(selectedKaryawan.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {selectedKaryawan.tempat_lahir}, {selectedKaryawan.tanggal_lahir ? new Date(selectedKaryawan.tanggal_lahir).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : "-"}
                   </p>
                 </div>
                 <div>

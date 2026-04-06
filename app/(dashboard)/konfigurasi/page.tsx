@@ -22,20 +22,116 @@ export default function KonfigurasiPage() {
   const [nilaiUang, setNilaiUang] = useState("");
   const [aktif, setAktif] = useState(true);
 
-  // Placeholders
-  useEffect(() => {
-    setKonfigurasiList([
-      { id: 1, tahun: "2024", jatah_cuti_tahunan: 12, nilai_uang_per_cuti: 150000, aktif: true },
-    ]);
-  }, []);
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingId && konfigurasiList.length >= 1) {
-      alert("Data sudah ada! Hanya diperbolehkan satu data konfigurasi.");
-      return;
+  const fetchKonfigurasi = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/konfigurasi", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Gagal mengambil data konfigurasi");
+      setKonfigurasiList(data.data || data);
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
     }
-    // No action as requested
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchKonfigurasi();
+    }
+  }, [token]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+
+    const url = editingId
+      ? `https://payroll.politekniklp3i-tasikmalaya.ac.id/api/konfigurasi/${editingId}`
+      : "https://payroll.politekniklp3i-tasikmalaya.ac.id/api/konfigurasi";
+    
+    const method = editingId ? "PATCH" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method: method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({
+          tahun,
+          jatah_cuti_tahunan: parseInt(jatahCuti),
+          nilai_uang_per_cuti: parseInt(nilaiUang),
+          aktif: aktif,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || `Gagal ${editingId ? 'mengupdate' : 'menambahkan'} konfigurasi`);
+      }
+
+      resetForm();
+      fetchKonfigurasi();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetForm = () => {
+    setTahun("");
+    setJatahCuti("");
+    setNilaiUang("");
+    setAktif(true);
+    setEditingId(null);
+  };
+
+  const handleEdit = (item: Konfigurasi) => {
+    setEditingId(item.id);
+    setTahun(item.tahun);
+    setJatahCuti(item.jatah_cuti_tahunan.toString());
+    setNilaiUang(item.nilai_uang_per_cuti.toString());
+    setAktif(item.aktif);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus konfigurasi ini?")) return;
+    try {
+      const res = await fetch(`https://payroll.politekniklp3i-tasikmalaya.ac.id/api/konfigurasi/${id}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Gagal menghapus konfigurasi");
+      }
+      fetchKonfigurasi();
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      }
+    }
   };
 
   const formatCurrency = (amount: number) => {
@@ -59,15 +155,6 @@ export default function KonfigurasiPage() {
             <h2 className="text-lg font-bold text-slate-900 dark:text-white">
               {editingId ? "Edit Konfigurasi" : "Tambah Konfigurasi"}
             </h2>
-          </div>
-
-          <div className="mb-6 rounded-2xl bg-amber-50 p-4 border border-amber-100/50 dark:bg-amber-900/10 dark:border-amber-900/20">
-            <div className="flex gap-3">
-              <span className="text-amber-500 mt-0.5">ℹ️</span>
-              <p className="text-xs font-medium text-amber-700 dark:text-amber-400 leading-relaxed">
-                Jika sudah terdapat satu data maka tidak dapat menambah data lagi.
-              </p>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -125,17 +212,24 @@ export default function KonfigurasiPage() {
               </select>
             </div>
 
+            {error && (
+              <div className="rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/10 dark:text-red-400 border border-red-100 dark:border-red-900/20">
+                {error}
+              </div>
+            )}
+
             <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-[0.98]"
+                disabled={loading}
+                className="flex-1 rounded-xl bg-primary px-4 py-3 text-sm font-bold text-white shadow-lg shadow-primary/20 transition-all hover:bg-primary/90 hover:shadow-primary/30 active:scale-[0.98] disabled:opacity-50"
               >
-                {editingId ? "Update" : "Simpan"}
+                {loading ? "Process..." : editingId ? "Update" : "Simpan"}
               </button>
               {editingId && (
                 <button
                   type="button"
-                  onClick={() => setEditingId(null)}
+                  onClick={resetForm}
                   className="rounded-xl bg-slate-100 px-4 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-200 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700"
                 >
                   Batal
@@ -172,14 +266,14 @@ export default function KonfigurasiPage() {
                 {konfigurasiList.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-8 py-16 text-center text-slate-400 italic">
-                      No configuration found.
+                      {loading ? "Menarik data..." : "No configuration found."}
                     </td>
                   </tr>
                 ) : (
                   konfigurasiList.map((item, index) => (
                     <tr key={item.id} className="group hover:bg-slate-50/50 dark:hover:bg-zinc-800/30 transition-colors">
                       <td className="px-8 py-5 font-bold text-slate-400">{index + 1}</td>
-                      <td className="px-8 py-5 font-black text-slate-700 dark:text-white">
+                      <td className="px-8 py-5 font-black text-slate-700 dark:text-white group-hover:text-primary transition-colors">
                         {item.tahun}
                       </td>
                       <td className="px-8 py-5 font-bold text-slate-500 dark:text-slate-400">
@@ -198,10 +292,18 @@ export default function KonfigurasiPage() {
                       <td className="px-8 py-5 text-right">
                         <div className="flex justify-end gap-3 translate-x-4 opacity-0 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300">
                           <button
+                            onClick={() => handleEdit(item)}
                             className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-primary rounded-xl transition-all shadow-sm hover:shadow-primary/30"
                             title="Edit"
                           >
                             ✏️
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="h-9 w-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-secondary rounded-xl transition-all shadow-sm hover:shadow-secondary/30"
+                            title="Hapus"
+                          >
+                            🗑️
                           </button>
                         </div>
                       </td>
