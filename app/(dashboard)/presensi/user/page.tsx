@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+interface Karyawan {
+  id: number;
+  nama: string;
+  email?: string;
+  nik?: string;
+}
+
 interface Presensi {
   id: number;
   id_karyawan: number;
@@ -10,6 +17,7 @@ interface Presensi {
   keterangan: string;
   jam_masuk: string;
   jam_keluar: string;
+  Karyawan?: Karyawan; // relasi dari backend (Sequelize include)
 }
 
 export default function KehadiranPage() {
@@ -46,7 +54,11 @@ export default function KehadiranPage() {
       const data = await res.json();
       if (res.ok) {
         const karyawans = data.data || data;
-        const myKaryawan = karyawans.find((k: any) => k.email === user.email);
+        // Gunakan toLowerCase() untuk meminimalkan error karena perbedaan case
+        const myKaryawan = karyawans.find((k: any) => k.email?.toLowerCase() === user.email?.toLowerCase());
+
+        console.log("== DEBUG: Data User Login ==", user.email);
+        console.log("== DEBUG: Apakah Karyawan Ketemu? ==", myKaryawan ? myKaryawan.id : "TIDAK KETEMU");
         
         if (myKaryawan) {
           setIdKaryawan(myKaryawan.id);
@@ -71,12 +83,30 @@ export default function KehadiranPage() {
         },
       });
       const data = await res.json();
+      console.log('data:',data);
+      
       if (res.ok) {
+        const allData = data.data || data;
+        console.log("== DEBUG: Total Semua Data Presensi API ==", allData.length);
+        
+        // Coba periksa apakah property di backend itu id_karyawan atau karyawan_id
+        if (allData.length > 0) {
+           console.log("== DEBUG: Contoh 1 Data Presensi API ==", allData[0]);
+        }
+
         // Filter hanya presensi milik karyawan yang login
-        const myPresensi = (data.data || data).filter(
-          (p: Presensi) => p.id_karyawan === karyawanId
+        const myPresensi = allData.filter(
+          (p: any) => Number(p.id_karyawan) === Number(karyawanId) || Number(p.karyawan_id) === Number(karyawanId) || p.karyawan?.id === karyawanId
         );
-        setRiwayat(myPresensi);
+
+        console.log("== DEBUG: Presensi Terfilter untuk ID", karyawanId, " ==", myPresensi.length);
+
+        // Urutkan berdasarkan tanggal terbaru
+        const sorted = myPresensi.sort((a: any, b: any) => {
+          return new Date(b.tanggal).getTime() - new Date(a.tanggal).getTime();
+        });
+
+        setRiwayat(sorted);
       }
     } catch (err: unknown) {
       console.error("Fetch Riwayat Error:", err);
@@ -281,6 +311,7 @@ export default function KehadiranPage() {
                 <thead className="bg-slate-50/50 dark:bg-zinc-800/50 text-slate-500 dark:text-zinc-400">
                    <tr>
                       <th className="px-8 py-4 font-bold uppercase tracking-wider text-[10px]">Tanggal</th>
+                      <th className="px-8 py-4 font-bold uppercase tracking-wider text-[10px]">Nama Karyawan</th>
                       <th className="px-8 py-4 font-bold uppercase tracking-wider text-[10px]">Masuk</th>
                       <th className="px-8 py-4 font-bold uppercase tracking-wider text-[10px]">Pulang</th>
                       <th className="px-8 py-4 font-bold uppercase tracking-wider text-[10px]">Status</th>
@@ -306,6 +337,7 @@ export default function KehadiranPage() {
                           <td className="px-8 py-5 font-bold text-slate-700 dark:text-white">
                             {new Date(row.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </td>
+                          <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.Karyawan?.nama || "-"}</td>
                           <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.jam_masuk || "-"}</td>
                           <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.jam_keluar || "-"}</td>
                           <td className="px-8 py-5">
