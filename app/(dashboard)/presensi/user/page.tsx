@@ -2,12 +2,31 @@
 
 import { useEffect, useState } from "react";
 
+interface Presensi {
+  id: number;
+  id_karyawan: number;
+  tanggal: string;
+  status: string;
+  keterangan: string;
+  jam_masuk: string;
+  jam_keluar: string;
+}
+
 export default function KehadiranPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [status, setStatus] = useState("Hadir");
+  const [status, setStatus] = useState("hadir");
   const [keterangan, setKeterangan] = useState("");
   const [mounted, setMounted] = useState(false);
-  
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [riwayat, setRiwayat] = useState<Presensi[]>([]);
+  const [loadingRiwayat, setLoadingRiwayat] = useState(false);
+  const [idKaryawan, setIdKaryawan] = useState<number | null>(null);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const user = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("user") || "{}") : {};
+
   // Real-time clock update
   useEffect(() => {
     setMounted(true);
@@ -15,12 +34,123 @@ export default function KehadiranPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const attendanceHistory = [
-    { date: "2024-03-01", clockIn: "08:00", clockOut: "17:00", status: "Hadir", note: "-" },
-    { date: "2024-02-28", clockIn: "08:15", clockOut: "17:05", status: "Hadir", note: "-" },
-    { date: "2024-02-27", clockIn: "-", clockOut: "-", status: "Izin", note: "Urusan Keluarga" },
-    { date: "2024-02-26", clockIn: "07:55", clockOut: "17:00", status: "Hadir", note: "-" },
-  ];
+  // Fetch Karyawan ID
+  const fetchMyKaryawanId = async () => {
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/karyawan", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        const karyawans = data.data || data;
+        const myKaryawan = karyawans.find((k: any) => k.email === user.email);
+        
+        if (myKaryawan) {
+          setIdKaryawan(myKaryawan.id);
+          fetchRiwayat(myKaryawan.id);
+        } else {
+          setError("Profil karyawan tidak ditemukan untuk email Anda. Hubungi Admin.");
+        }
+      }
+    } catch (err: unknown) {
+      console.error("Fetch Karyawan Error:", err);
+    }
+  };
+
+  // Fetch riwayat presensi
+  const fetchRiwayat = async (karyawanId: number) => {
+    setLoadingRiwayat(true);
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/presensi", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
+        },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Filter hanya presensi milik karyawan yang login
+        const myPresensi = (data.data || data).filter(
+          (p: Presensi) => p.id_karyawan === karyawanId
+        );
+        setRiwayat(myPresensi);
+      }
+    } catch (err: unknown) {
+      console.error("Fetch Riwayat Error:", err);
+    } finally {
+      setLoadingRiwayat(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token && user.email) {
+      fetchMyKaryawanId();
+    }
+  }, [token, user.email]);
+
+  // Submit presensi
+  const handleSubmit = async () => {
+    if (!idKaryawan) {
+      setError("Data karyawan belum siap. Silakan refresh halaman.");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    setSuccess("");
+
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const tanggal = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const jamMasuk = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+    try {
+      const res = await fetch("https://payroll.politekniklp3i-tasikmalaya.ac.id/api/presensi", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          id_karyawan: idKaryawan,
+          tanggal: tanggal,
+          status: status,
+          keterangan: keterangan || "-",
+          jam_masuk: jamMasuk,
+          jam_keluar: "17:00:00",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || "Gagal menyimpan presensi");
+      }
+
+      setSuccess("Presensi berhasil disimpan! ✅");
+      setKeterangan("");
+      setStatus("hadir");
+      fetchRiwayat(idKaryawan); // Refresh riwayat
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("Terjadi kesalahan yang tidak terduga");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Format status label
+  const getStatusLabel = (s: string) => {
+    const map: Record<string, string> = { hadir: "Hadir", izin: "Izin", sakit: "Sakit" };
+    return map[s] || s;
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-700">
@@ -62,7 +192,7 @@ export default function KehadiranPage() {
                 <div>
                   <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3 block">Status Kehadiran</label>
                   <div className="grid grid-cols-3 gap-3">
-                    {["Hadir", "Izin", "Sakit"].map((s) => (
+                    {["hadir", "izin", "sakit"].map((s) => (
                       <button
                         key={s}
                         onClick={() => setStatus(s)}
@@ -72,7 +202,7 @@ export default function KehadiranPage() {
                             : "bg-slate-50 border-slate-100 text-slate-500 hover:border-primary/30 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
                         }`}
                       >
-                        {s}
+                        {getStatusLabel(s)}
                       </button>
                     ))}
                   </div>
@@ -88,9 +218,39 @@ export default function KehadiranPage() {
                    />
                 </div>
 
-                <button className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                  <i className="fi fi-rr-check"></i>
-                  Submit Kehadiran
+                {/* Error Message */}
+                {error && (
+                  <div className="rounded-xl bg-rose-50 p-3 text-xs font-medium text-rose-600 dark:bg-rose-900/10 dark:text-rose-400 border border-rose-100 dark:border-rose-900/20">
+                    {error}
+                  </div>
+                )}
+
+                {/* Success Message */}
+                {success && (
+                  <div className="rounded-xl bg-emerald-50 p-3 text-xs font-medium text-emerald-600 dark:bg-emerald-900/10 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/20">
+                    {success}
+                  </div>
+                )}
+
+                <button 
+                  onClick={handleSubmit}
+                  disabled={loading}
+                  className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                      Menyimpan...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fi fi-rr-check"></i>
+                      Submit Kehadiran
+                    </>
+                  )}
                 </button>
              </div>
           </div>
@@ -111,7 +271,10 @@ export default function KehadiranPage() {
         <div className="lg:col-span-8 rounded-3xl bg-white shadow-xl shadow-slate-200/50 dark:bg-zinc-900 dark:shadow-none border border-slate-100 dark:border-zinc-800 overflow-hidden">
           <div className="px-8 py-6 border-b border-slate-50 dark:border-zinc-800 flex justify-between items-center">
              <h3 className="text-lg font-bold text-slate-900 dark:text-white">Riwayat Kehadiran</h3>
-             <button className="text-xs font-bold text-primary hover:underline">Lihat Semua</button>
+             <div className="flex items-center gap-2 text-xs font-bold bg-tertiary/10 text-tertiary px-4 py-1.5 rounded-full shadow-sm">
+               <span className="h-1.5 w-1.5 rounded-full bg-tertiary animate-pulse" />
+               {riwayat.length} Records
+             </div>
           </div>
           <div className="overflow-x-auto">
              <table className="w-full text-left text-sm">
@@ -125,25 +288,41 @@ export default function KehadiranPage() {
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-zinc-800">
-                   {attendanceHistory.map((row, i) => (
-                     <tr key={i} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
-                        <td className="px-8 py-5 font-bold text-slate-700 dark:text-white">
-                          {new Date(row.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </td>
-                        <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.clockIn}</td>
-                        <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.clockOut}</td>
-                        <td className="px-8 py-5">
-                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
-                             row.status === "Hadir" 
-                               ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
-                               : "bg-amber-50 text-amber-600 border-amber-100"
-                           }`}>
-                             {row.status}
-                           </span>
-                        </td>
-                        <td className="px-8 py-5 text-slate-400 italic text-xs">{row.note}</td>
+                   {loadingRiwayat ? (
+                     <tr>
+                       <td colSpan={5} className="px-8 py-16 text-center text-slate-400 italic">
+                         Memuat riwayat...
+                       </td>
                      </tr>
-                   ))}
+                   ) : riwayat.length === 0 ? (
+                     <tr>
+                       <td colSpan={5} className="px-8 py-16 text-center text-slate-400 italic">
+                         Belum ada riwayat presensi.
+                       </td>
+                     </tr>
+                   ) : (
+                     riwayat.map((row, i) => (
+                       <tr key={row.id || i} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="px-8 py-5 font-bold text-slate-700 dark:text-white">
+                            {new Date(row.tanggal).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </td>
+                          <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.jam_masuk || "-"}</td>
+                          <td className="px-8 py-5 text-slate-600 dark:text-slate-400 font-medium tabular-nums">{row.jam_keluar || "-"}</td>
+                          <td className="px-8 py-5">
+                             <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest border ${
+                               row.status === "hadir" 
+                                 ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
+                                 : row.status === "sakit"
+                                   ? "bg-rose-50 text-rose-600 border-rose-100"
+                                   : "bg-amber-50 text-amber-600 border-amber-100"
+                             }`}>
+                               {getStatusLabel(row.status)}
+                             </span>
+                          </td>
+                          <td className="px-8 py-5 text-slate-400 italic text-xs">{row.keterangan || "-"}</td>
+                       </tr>
+                     ))
+                   )}
                 </tbody>
              </table>
           </div>
