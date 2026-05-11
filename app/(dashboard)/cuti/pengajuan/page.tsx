@@ -1,12 +1,81 @@
 "use client";
 
 import { useState } from "react";
+import api from "@/lib/api";
 
 export default function FormCutiPage() {
   const [leaveType, setLeaveType] = useState("Tahunan");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const calculateDays = (start: string, end: string) => {
+    if (!start || !end) return 0;
+    const s = new Date(start);
+    const e = new Date(end);
+    const diffTime = Math.abs(e.getTime() - s.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+    return diffDays;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    const jumlah_hari = calculateDays(startDate, endDate);
+    
+    // Get user id from localStorage dynamically
+    let id_karyawan = null;
+    if (typeof window !== 'undefined') {
+      const userStr = localStorage.getItem('user');
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr);
+          // Prioritize 'id' as requested by user, then fallback to 'id_karyawan'
+          id_karyawan = user.id || user.id_karyawan;
+        } catch (err) {
+          console.error("Error parsing user from localStorage", err);
+        }
+      }
+    }
+
+    if (!id_karyawan) {
+      setMessage({ type: 'error', text: "Sesi Anda telah berakhir. Silahkan login kembali." });
+      setLoading(false);
+      return;
+    }
+
+    const payload = {
+      id_karyawan,
+      tanggal_mulai: startDate,
+      tanggal_selesai: endDate,
+      jumlah_hari,
+      alasan: reason,
+      jenis_cuti: leaveType
+    };
+
+    try {
+      const response = await api.post("/api/cuti", payload);
+
+      if (response.status === 200 || response.status === 201) {
+        setMessage({ type: 'success', text: "Pengajuan cuti berhasil dikirim!" });
+        // Reset form
+        setStartDate("");
+        setEndDate("");
+        setReason("");
+      } else {
+        setMessage({ type: 'error', text: "Gagal mengirim pengajuan cuti." });
+      }
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || "Terjadi kesalahan koneksi.";
+      setMessage({ type: 'error', text: errorMsg });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const leaveTypes = [
     { id: "tahunan", name: "Cuti Tahunan", icon: "fi-rr-calendar-check", color: "text-emerald-500", bg: "bg-emerald-50" },
@@ -25,7 +94,19 @@ export default function FormCutiPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
           <div className="rounded-3xl bg-white p-8 shadow-xl shadow-slate-200/50 dark:bg-zinc-900 dark:shadow-none border border-slate-100 dark:border-zinc-800">
-            <form className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {message && (
+                <div className={`p-4 rounded-xl text-sm font-medium border ${
+                  message.type === 'success' 
+                    ? 'bg-emerald-50 border-emerald-100 text-emerald-600 dark:bg-emerald-900/10 dark:border-emerald-900/20 dark:text-emerald-400' 
+                    : 'bg-rose-50 border-rose-100 text-rose-600 dark:bg-rose-900/10 dark:border-rose-900/20 dark:text-rose-400'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    <i className={`fi ${message.type === 'success' ? 'fi-rr-check-circle' : 'fi-rr-exclamation'}`}></i>
+                    {message.text}
+                  </div>
+                </div>
+              )}
               {/* Leave Type Selector */}
               <div>
                 <label className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-4 block">Pilih Jenis Cuti</label>
@@ -94,9 +175,25 @@ export default function FormCutiPage() {
               </div>
 
               <div className="pt-4">
-                <button className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2">
-                  <i className="fi fi-rr-paper-plane"></i>
-                  Kirim Pengajuan
+                <button 
+                  type="submit"
+                  disabled={loading}
+                  className="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-2xl shadow-lg shadow-primary/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Memproses...
+                    </span>
+                  ) : (
+                    <>
+                      <i className="fi fi-rr-paper-plane"></i>
+                      Kirim Pengajuan
+                    </>
+                  )}
                 </button>
               </div>
             </form>

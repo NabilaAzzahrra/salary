@@ -1,21 +1,79 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 
 export default function RiwayatCutiPage() {
   const [activeTab, setActiveTab] = useState("Semua");
+  const [history, setHistory] = useState<any[]>([]);
+  const [saldo, setSaldo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Get user ID from localStorage
+      let userId = null;
+      if (typeof window !== 'undefined') {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          const user = JSON.parse(userStr);
+          userId = user.id || user.id_karyawan;
+        }
+      }
+
+      if (userId) {
+        // Fetch history and saldo in parallel
+        const [historyRes, saldoRes] = await Promise.all([
+          api.get(`/api/cuti/history/${userId}`),
+          api.get(`/api/cuti/saldo/${userId}`)
+        ]);
+
+        if (historyRes.status === 200) setHistory(historyRes.data);
+        if (saldoRes.status === 200) setSaldo(saldoRes.data);
+      }
+    } catch (error) {
+      console.error("Error fetching leave data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const leaveQuota = [
-    { title: "Total Cuti", value: 12, label: "Hari / Tahun", icon: "fi-rr-calendar-check", color: "text-indigo-600", bg: "bg-indigo-50" },
-    { title: "Cuti Diambil", value: 4, label: "Hari", icon: "fi-rr-calendar-minus", color: "text-rose-600", bg: "bg-rose-50" },
-    { title: "Sisa Cuti", value: 8, label: "Hari Tersisa", icon: "fi-rr-clock", color: "text-emerald-600", bg: "bg-emerald-50" },
+    { 
+      title: "Total Cuti", 
+      value: saldo?.jatah || 0, 
+      label: "Hari / Tahun", 
+      icon: "fi-rr-calendar-check", 
+      color: "text-indigo-600", 
+      bg: "bg-indigo-50" 
+    },
+    { 
+      title: "Cuti Diambil", 
+      value: saldo?.terpakai || 0, 
+      label: "Hari", 
+      icon: "fi-rr-calendar-minus", 
+      color: "text-rose-600", 
+      bg: "bg-rose-50" 
+    },
+    { 
+      title: "Sisa Cuti", 
+      value: saldo?.sisa || 0, 
+      label: "Hari Tersisa", 
+      icon: "fi-rr-clock", 
+      color: "text-emerald-600", 
+      bg: "bg-emerald-50" 
+    },
   ];
 
-  const leaveHistory = [
-    { id: 1, type: "Tahunan", start: "2024-02-15", end: "2024-02-17", days: 3, status: "Approved", reason: "Acara Keluarga" },
-    { id: 2, type: "Sakit", start: "2024-01-10", end: "2024-01-11", days: 1, status: "Approved", reason: "Flu & Demam" },
-    { id: 3, type: "Tahunan", start: "2024-03-10", end: "2024-03-12", days: 3, status: "Pending", reason: "Liburan Akhir Pekan" },
-  ];
+  const filteredHistory = history.filter(item => {
+    if (activeTab === "Semua") return true;
+    return item.status?.toLowerCase() === activeTab.toLowerCase();
+  });
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -79,31 +137,48 @@ export default function RiwayatCutiPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-zinc-800">
-              {leaveHistory.map((row) => (
-                <tr key={row.id} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
-                  <td className="px-8 py-5">
-                    <span className={`px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-[11px] font-bold text-slate-700 dark:text-slate-400 border border-slate-200/50 dark:border-zinc-700`}>
-                      {row.type}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
-                    {new Date(row.start).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} - {new Date(row.end).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td className="px-8 py-5 text-slate-500 dark:text-slate-400 font-bold tabular-nums">{row.days} Hari</td>
-                  <td className="px-8 py-5 text-slate-500 dark:text-slate-400 text-xs italic truncate max-w-[200px]">{row.reason}</td>
-                  <td className="px-8 py-5 text-right">
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
-                      row.status === "Approved" 
-                        ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
-                        : row.status === "Pending" 
-                          ? "bg-amber-50 text-amber-600 border-amber-100"
-                          : "bg-rose-50 text-rose-600 border-rose-100"
-                    }`}>
-                      {row.status}
-                    </span>
+              {loading ? (
+                <tr>
+                  <td colSpan={5} className="px-8 py-10 text-center text-slate-400">
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="h-6 w-6 border-2 border-primary border-t-transparent animate-spin rounded-full"></div>
+                      <span className="text-xs font-medium">Memuat data...</span>
+                    </div>
                   </td>
                 </tr>
-              ))}
+              ) : filteredHistory.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-8 py-10 text-center text-slate-400 text-xs font-medium italic">
+                    Belum ada riwayat pengajuan cuti.
+                  </td>
+                </tr>
+              ) : (
+                filteredHistory.map((row) => (
+                  <tr key={row.id} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
+                    <td className="px-8 py-5">
+                      <span className={`px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800 text-[11px] font-bold text-slate-700 dark:text-slate-400 border border-slate-200/50 dark:border-zinc-700`}>
+                        {row.jenis_cuti || "Tahunan"}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 font-semibold text-slate-600 dark:text-slate-300 tabular-nums">
+                      {new Date(row.tanggal_mulai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} - {new Date(row.tanggal_selesai).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
+                    </td>
+                    <td className="px-8 py-5 text-slate-500 dark:text-slate-400 font-bold tabular-nums">{row.jumlah_hari} Hari</td>
+                    <td className="px-8 py-5 text-slate-500 dark:text-slate-400 text-xs italic truncate max-w-[200px]">{row.alasan || "-"}</td>
+                    <td className="px-8 py-5 text-right">
+                      <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                        row.status?.toLowerCase() === "approved" 
+                          ? "bg-emerald-50 text-emerald-600 border-emerald-100" 
+                          : row.status?.toLowerCase() === "pending" 
+                            ? "bg-amber-50 text-amber-600 border-amber-100"
+                            : "bg-rose-50 text-rose-600 border-rose-100"
+                      }`}>
+                        {row.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
