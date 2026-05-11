@@ -1,21 +1,58 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import api from "@/lib/api";
 
 export default function ReportCutiPage() {
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+  const [reportData, setReportData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [history, setHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
-  const employeesLeave = [
-    { id: 1, nik: "EMP001", nama: "Ahmad Fauzi", divisi: "IT", total: 12, used: 4, remaining: 8 },
-    { id: 2, nik: "EMP002", nama: "Siti Aminah", divisi: "HR", total: 12, used: 2, remaining: 10 },
-    { id: 3, nik: "EMP003", nama: "Budi Santoso", divisi: "Finance", total: 12, used: 12, remaining: 0 },
-    { id: 4, nik: "EMP004", nama: "Rina Wijaya", divisi: "Marketing", total: 15, used: 5, remaining: 10 },
-  ];
+  useEffect(() => {
+    fetchReport();
+  }, []);
 
-  const employeeHistory = [
-    { date: "2024-02-15", type: "Tahunan", days: 3, status: "Approved", reason: "Acara Keluarga" },
-    { date: "2024-01-10", type: "Sakit", days: 1, status: "Approved", reason: "Demam" },
-  ];
+  const fetchReport = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/api/cuti/report");
+      if (res.status === 200) {
+        setReportData(res.data);
+      }
+    } catch (error) {
+      console.error("Error fetching report:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchEmployeeHistory = async (emp: any) => {
+    setSelectedEmployee(emp);
+    setLoadingHistory(true);
+    try {
+      const res = await api.get(`/api/cuti/history/${emp.id}`);
+      if (res.status === 200) {
+        setHistory(res.data);
+      }
+    } catch (error) {
+      console.error("Error fetching employee history:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const filteredEmployees = reportData.filter(emp => 
+    emp.nama?.toLowerCase().includes(search.toLowerCase()) ||
+    emp.nik?.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const stats = {
+    total: reportData.reduce((acc, curr) => acc + (curr.CutiTahunan?.jatah || 0), 0),
+    used: reportData.reduce((acc, curr) => acc + (curr.CutiTahunan?.terpakai || 0), 0),
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -33,21 +70,23 @@ export default function ReportCutiPage() {
 
       {/* Filter Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-         <div className="md:col-span-2 relative">
+          <div className="md:col-span-2 relative">
             <i className="fi fi-rr-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"></i>
             <input 
              type="text" 
-             placeholder="Cari nama karyawan..."
+             placeholder="Cari nama atau NIK karyawan..."
+             value={search}
+             onChange={(e) => setSearch(e.target.value)}
              className="w-full pl-12 pr-4 py-3 rounded-2xl border border-slate-100 bg-white outline-none focus:border-primary transition-all dark:bg-zinc-900 dark:border-zinc-800 dark:text-white text-sm shadow-sm"
             />
          </div>
          <div className="bg-emerald-50 dark:bg-emerald-900/10 p-3 rounded-2xl border border-emerald-100 dark:border-emerald-900/20 flex items-center justify-between">
             <span className="text-[10px] font-black text-emerald-600 uppercase tracking-wider">Total Saldo</span>
-            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">450 Hari</span>
+            <span className="text-lg font-black text-emerald-700 dark:text-emerald-400">{stats.total} Hari</span>
          </div>
          <div className="bg-rose-50 dark:bg-rose-900/10 p-3 rounded-2xl border border-rose-100 dark:border-rose-900/20 flex items-center justify-between">
             <span className="text-[10px] font-black text-rose-600 uppercase tracking-wider">Terpakai</span>
-            <span className="text-lg font-black text-rose-700 dark:text-rose-400">124 Hari</span>
+            <span className="text-lg font-black text-rose-700 dark:text-rose-400">{stats.used} Hari</span>
          </div>
       </div>
 
@@ -66,37 +105,58 @@ export default function ReportCutiPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50 dark:divide-zinc-800">
-              {employeesLeave.map((row) => (
-                <tr key={row.id} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
-                  <td className="px-8 py-5">
-                    <div>
-                      <div className="font-bold text-slate-700 dark:text-white group-hover:text-primary transition-colors">{row.nama}</div>
-                      <div className="text-[10px] text-slate-400 font-medium tracking-wider">{row.nik}</div>
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-8 py-20 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="h-8 w-8 border-4 border-primary border-t-transparent animate-spin rounded-full"></div>
+                      <span className="text-xs font-bold text-slate-400">Memuat data report...</span>
                     </div>
                   </td>
-                  <td className="px-8 py-5">
-                    <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-zinc-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                      {row.divisi}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 text-center font-bold text-slate-600 dark:text-slate-400 tabular-nums">{row.total}</td>
-                  <td className="px-8 py-5 text-center font-bold text-rose-500 tabular-nums">{row.used}</td>
-                  <td className="px-8 py-5 text-center">
-                    <span className={`text-sm font-black tabular-nums ${row.remaining > 5 ? "text-emerald-500" : row.remaining > 0 ? "text-amber-500" : "text-rose-500"}`}>
-                      {row.remaining}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <button 
-                      onClick={() => setSelectedEmployee(row)}
-                      className="h-9 w-9 rounded-xl bg-slate-50 dark:bg-zinc-800 text-slate-400 hover:text-white hover:bg-primary transition-all flex items-center justify-center shadow-sm"
-                      title="Lihat Detail History"
-                    >
-                      <i className="fi fi-rr-info"></i>
-                    </button>
+                </tr>
+              ) : filteredEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-8 py-20 text-center text-slate-400 text-sm italic">
+                    Karyawan tidak ditemukan.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredEmployees.map((row) => (
+                  <tr key={row.id} className="group hover:bg-slate-50/30 dark:hover:bg-zinc-800/30 transition-colors">
+                    <td className="px-8 py-5">
+                      <div>
+                        <div className="font-bold text-slate-700 dark:text-white group-hover:text-primary transition-colors">{row.nama}</div>
+                        <div className="text-[10px] text-slate-400 font-medium tracking-wider">{row.nik}</div>
+                      </div>
+                    </td>
+                    <td className="px-8 py-5">
+                      <span className="px-2 py-1 rounded-lg bg-slate-100 dark:bg-zinc-800 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                        {row.Jabatan?.Divisi?.divisi || "N/A"}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 text-center font-bold text-slate-600 dark:text-slate-400 tabular-nums">
+                      {row.CutiTahunan?.jatah || 0}
+                    </td>
+                    <td className="px-8 py-5 text-center font-bold text-rose-500 tabular-nums">
+                      {row.CutiTahunan?.terpakai || 0}
+                    </td>
+                    <td className="px-8 py-5 text-center">
+                      <span className={`text-sm font-black tabular-nums ${ (row.CutiTahunan?.sisa || 0) > 5 ? "text-emerald-500" : (row.CutiTahunan?.sisa || 0) > 0 ? "text-amber-500" : "text-rose-500"}`}>
+                        {row.CutiTahunan?.sisa || 0}
+                      </span>
+                    </td>
+                    <td className="px-8 py-5 text-right">
+                      <button 
+                        onClick={() => fetchEmployeeHistory(row)}
+                        className="h-9 w-9 rounded-xl bg-slate-50 dark:bg-zinc-800 text-slate-400 hover:text-white hover:bg-primary transition-all flex items-center justify-center shadow-sm"
+                        title="Lihat Detail History"
+                      >
+                        <i className="fi fi-rr-info"></i>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -110,7 +170,7 @@ export default function ReportCutiPage() {
                 <div>
                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">Detailed History</p>
                    <h3 className="text-2xl font-black text-slate-900 dark:text-white">{selectedEmployee.nama}</h3>
-                   <p className="text-xs text-slate-400 font-medium">Sisa Saldo Cuti: <span className="text-emerald-500 font-bold">{selectedEmployee.remaining} Hari</span></p>
+                   <p className="text-xs text-slate-400 font-medium">Sisa Saldo Cuti: <span className="text-emerald-500 font-bold">{selectedEmployee.CutiTahunan?.sisa || 0} Hari</span></p>
                 </div>
                 <button 
                   onClick={() => setSelectedEmployee(null)}
@@ -132,21 +192,25 @@ export default function ReportCutiPage() {
                       </tr>
                    </thead>
                    <tbody className="divide-y divide-slate-50 dark:divide-zinc-800">
-                      {employeeHistory.map((h, i) => (
-                        <tr key={i} className="text-slate-600 dark:text-slate-300">
-                           <td className="py-4 font-bold whitespace-nowrap">{h.date}</td>
-                           <td className="py-4">
-                              <span className="px-2 py-1 rounded-lg bg-slate-50 dark:bg-zinc-800 text-[10px] font-bold">{h.type}</span>
-                           </td>
-                           <td className="py-4 font-bold tabular-nums text-primary">{h.days} Hari</td>
-                           <td className="py-4 text-xs italic">{h.reason}</td>
-                           <td className="py-4 text-right">
-                              <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[9px] font-black uppercase tracking-widest border border-emerald-100">
-                                {h.status}
-                              </span>
-                           </td>
-                        </tr>
-                      ))}
+{loadingHistory ? (
+                         <tr><td colSpan={5} className="py-10 text-center text-xs text-slate-400 font-medium">Memuat history...</td></tr>
+                       ) : history.length === 0 ? (
+                         <tr><td colSpan={5} className="py-10 text-center text-xs text-slate-400 font-medium italic">Belum ada riwayat cuti.</td></tr>
+                       ) : (
+                         history.map((h, i) => (
+                           <tr key={i} className="text-slate-600 dark:text-slate-300">
+                              <td className="py-4 font-bold whitespace-nowrap text-xs">{new Date(h.tanggal_mulai).toLocaleDateString('id-ID')}</td>
+                              <td className="py-4"><span className="px-2 py-1 rounded-lg bg-slate-50 dark:bg-zinc-800 text-[10px] font-bold">{h.jenis_cuti || "Tahunan"}</span></td>
+                              <td className="py-4 font-bold tabular-nums text-primary">{h.jumlah_hari} Hari</td>
+                              <td className="py-4 text-[11px] italic truncate max-w-[150px]">{h.alasan || "-"}</td>
+                              <td className="py-4 text-right">
+                                 <span className={`px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border ${
+                                   h.status?.toLowerCase() === "approved" ? "bg-emerald-50 text-emerald-600 border-emerald-100" : h.status?.toLowerCase() === "pending" ? "bg-amber-50 text-amber-600 border-amber-100" : "bg-rose-50 text-rose-600 border-rose-100"
+                                 }`}>{h.status}</span>
+                              </td>
+                           </tr>
+                         ))
+                       )}
                    </tbody>
                 </table>
              </div>
